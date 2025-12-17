@@ -79,7 +79,8 @@ class LivePaceman(Star):
             })
             yield event.plain_result(f"玩家 {player_name} 订阅成功，房间ID为 {room_id}。")
         else:
-            self.players[formatted_player_name]["subscriber_id"].append(subscriber_id)
+            if subscriber_id not in self.players[formatted_player_name]["subscriber_id"]:
+                self.players[formatted_player_name]["subscriber_id"].append(subscriber_id)
             self.players[formatted_player_name]["room_id"] = room_id
             self.players[formatted_player_name]["player_name"] = player_name
             yield event.plain_result(f"玩家 {player_name} 订阅更新，房间ID为 {room_id}。")
@@ -182,11 +183,8 @@ class LivePaceman(Star):
 
         logger.info(f"玩家 {player_name} 当前实时pace: {message}")
 
-        self.players[player_name]["last_world_id"] = world_id
-        self.players[player_name]["last_event"] = current_event['eventId']
-        self._save_players_list(self.players)
-
-        return message
+        # 返回消息和状态信息，在发送成功后再更新
+        return message, world_id, event_id
 
     async def _notify_player(self):
         data = await self._fetch_live_paceman()
@@ -197,15 +195,26 @@ class LivePaceman(Star):
             for player in players:
                 if player in current_players:
                     current_stats = [item for item in data if item["nickname"].lower() == player][0]
-                    message = await self._build_message(player, current_stats)
+                    result = await self._build_message(player, current_stats)
+                    
+                    if result is None:
+                        logger.info(f"玩家 {player} 不需要通知")
+                        continue
+                    
+                    message, world_id, event_id = result
+                    
+                    # 发送消息给所有订阅者
                     for subscriber_id in self.players[player]["subscriber_id"]:
-                        if message:
-                            await self.context.send_message(
-                                subscriber_id, MessageChain(chain=[Comp.Plain(message)])
-                            )
-                        else:
-                            logger.info(f"玩家 {player} 不需要通知")
-                        await asyncio.sleep(1)
+                        await self.context.send_message(
+                            subscriber_id, MessageChain(chain=[Comp.Plain(message)])
+                        )
+                        await asyncio.sleep(0.5)  # 减少延迟
+                    
+                    # 消息发送成功后才更新状态
+                    self.players[player]["last_world_id"] = world_id
+                    self.players[player]["last_event"] = event_id
+                    self._save_players_list(self.players)
+                    logger.info(f"玩家 {player} 状态已更新: world_id={world_id}, event={event_id}")
         except Exception as e:
             logger.error(f"通知玩家失败: {e}")
 
@@ -217,6 +226,7 @@ class LivePaceman(Star):
                 except Exception as e:
                     logger.error(f"获取实时pace数据失败: {e}")
                     
+                # 每15秒检查一次
                 await asyncio.sleep(15)
         except Exception as e:
             logger.error(f"停止检查实时pace数据: {e}")
@@ -226,6 +236,10 @@ class LivePaceman(Star):
     # 生命周期方法
     async def initialize(self):
         """可选择实现异步的插件初始化方法，当实例化该插件类之后会自动调用该方法。"""
+        if self.task is not None and not self.task.done():
+            logger.warning("实时pace插件已经在运行中，跳过重复初始化")
+            return
+        
         self.task = asyncio.create_task(self._check_live_paceman_periodically())
         logger.info("实时pace插件已启动")
 
