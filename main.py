@@ -118,20 +118,19 @@ class LivePaceman(Star):
             match event_id:
                 case 'rsg.first_portal':
                     # 盲传时间大于8分钟不通知
-                    if igt > 5480000:
+                    if igt > 480000:
                         return False
                 case 'rsg.enter_stronghold':
                     # 进要塞时间大于11分钟不通知
-                    if igt > 5660000:
+                    if igt > 660000:
                         return False
                 case 'rsg.enter_end':
                     # 进末地时间大于13分钟不通知
-                    if igt > 5780000:
+                    if igt > 780000:
                         return False
                 case 'rsg.credits':
-                    # 通关时间大于15分钟不通知
-                    if igt > 5900000:
-                        return False
+                    # 只要通关就通知
+                    return True
                 case _:
                     return False
         else:
@@ -205,7 +204,6 @@ class LivePaceman(Star):
             while True:
                 try:
                     await self._notify_player()
-                    logger.info("执行通知玩家")
                 except Exception as e:
                     logger.error(f"获取实时pace数据失败: {e}")
                     
