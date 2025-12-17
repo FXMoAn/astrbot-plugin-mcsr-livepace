@@ -176,19 +176,22 @@ class LivePaceman(Star):
                 return False
         return True
 
-    async def _is_player_online(self, room_id: str):
+    async def _is_player_online(self, room_id: str | None):
+        if room_id is None:
+            return False
         try:
             async with httpx.AsyncClient() as client:
                 response = await client.get(f"https://api.live.bilibili.com/room/v1/Room/get_info?room_id={room_id}")
-                if response.status_code == 200:
-                    data = response.json()
-                    if data['data']['live_status'] == 1:
-                        return True
-                    else:
-                        return False
+                response.raise_for_status() 
+                logger.info(f"检查玩家 {room_id} 是否在线成功")
+                data = response.json()
+                if data['data']['live_status'] == 1:
+                    return True
                 else:
                     return False
+               
         except Exception as e:
+            logger.error(f"检查玩家 {room_id} 是否在线失败: {e}")
             return False
 
     async def _build_message(self, player_name: str, current_stats: dict):
