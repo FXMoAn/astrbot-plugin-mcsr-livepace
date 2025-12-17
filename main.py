@@ -38,8 +38,18 @@ class LivePaceman(Star):
     def _normalize_player_name(self, player_name):
         return player_name.lower()
 
-    def _check_player_exists(self, player_name):
-        return True
+    async def _check_player_exists(self, player_name):
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                response = await client.get(f"https://paceman.gg/stats/api/getSessionStats/?name={player_name}&hours=24&hoursBetween=24")
+                response.raise_for_status()
+                data = response.json()
+                if data['nether']:
+                    return True
+                else:
+                    return False
+        except Exception as e:
+            return False
 
     def _format_time(self, time: int):
         # 将6位数毫秒级时间转换为分钟:秒.毫秒格式
@@ -52,7 +62,7 @@ class LivePaceman(Star):
     @filter.command("livepacesub")
     async def livePacemanSub(self, event: AstrMessageEvent, player_name: str, room_id: str | None = None):
         """订阅玩家"""
-        if not self._check_player_exists(player_name):
+        if not await self._check_player_exists(player_name):
             yield event.plain_result(f"玩家 {player_name} 不存在，请输入正确的玩家名。")
             return
 
