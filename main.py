@@ -87,6 +87,33 @@ class LivePaceman(Star):
 
         self._save_players_list(self.players)
 
+    @filter.command("livepaceunsub")
+    async def livePacemanUnsub(self, event: AstrMessageEvent, player_name: str):
+        """取消订阅玩家"""
+        player_name = player_name.lower()
+        if player_name not in self.players.keys():
+            yield event.plain_result(f"玩家 {player_name} 不存在，请输入正确的玩家名。")
+            return
+        self.players[player_name]["subscriber_id"].remove(event.unified_msg_origin)
+        if not self.players[player_name]["subscriber_id"]:
+            del self.players[player_name]
+        self._save_players_list(self.players)
+        yield event.plain_result(f"你取消了订阅 {player_name}。")
+
+    @filter.command("livepaceunsuball")
+    async def livePacemanUnsubAll(self, event: AstrMessageEvent, player_name: str):
+        """取消所有订阅"""
+        player_name = player_name.lower()
+        if player_name not in self.players.keys():
+            yield event.plain_result(f"玩家 {player_name} 不存在，请输入正确的玩家名。")
+            return
+        for subscriber_id in self.players[player_name]["subscriber_id"]:
+            self.players[player_name]["subscriber_id"].remove(subscriber_id)
+        if not self.players[player_name]["subscriber_id"]:
+            del self.players[player_name]
+        self._save_players_list(self.players)
+        yield event.plain_result(f"你取消了订阅 {player_name} 的所有订阅。")
+
     # 获取订阅列表命令
     @filter.command("livepacesublist")
     async def livePacemanSubList(self, event: AstrMessageEvent):
@@ -149,6 +176,21 @@ class LivePaceman(Star):
                 return False
         return True
 
+    async def _is_player_online(self, room_id: str):
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.get(f"https://api.live.bilibili.com/room/v1/Room/get_info?room_id={room_id}")
+                if response.status_code == 200:
+                    data = response.json()
+                    if data['data']['live_status'] == 1:
+                        return True
+                    else:
+                        return False
+                else:
+                    return False
+        except Exception as e:
+            return False
+
     async def _build_message(self, player_name: str, current_stats: dict):
         current_event = current_stats['eventList'][-1]
         world_id = current_stats['worldId']
@@ -180,6 +222,9 @@ class LivePaceman(Star):
                    f"当前进度: {event_name} \n"
                    f"真实时间: {rta} \n"
                    f"游戏时间: {igt} \n")
+
+        if await self._is_player_online(self.players[player_name]["room_id"]):
+            message += f"\n直播间: https://live.bilibili.com/{self.players[player_name]['room_id']}"
 
         logger.info(f"玩家 {player_name} 当前实时pace: {message}")
 
