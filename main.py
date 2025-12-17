@@ -11,7 +11,7 @@ import asyncio
 # 用户列表FILE
 PLAYERS_LIST_FILE = "data/live_paceman_players_list.json"
 
-@register("livepaceman", "Mo_An", "livepaceman", "1.0.2")
+@register("livepaceman", "Mo_An", "livepaceman", "1.0.3")
 class LivePaceman(Star):
     def __init__(self, context: Context):
         super().__init__(context)
