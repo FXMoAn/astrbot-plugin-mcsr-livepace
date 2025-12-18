@@ -11,7 +11,7 @@ import asyncio
 # 用户列表FILE
 PLAYERS_LIST_FILE = "data/live_paceman_players_list.json"
 
-@register("livepaceman", "Mo_An", "livepaceman", "1.0.3")
+@register("livepaceman", "Mo_An", "livepaceman", "1.0.4")
 class LivePaceman(Star):
     def __init__(self, context: Context):
         super().__init__(context)
@@ -100,9 +100,10 @@ class LivePaceman(Star):
         self._save_players_list(self.players)
         yield event.plain_result(f"你取消了订阅 {player_name}。")
 
+    @filter.permission_type(filter.PermissionType.ADMIN)
     @filter.command("livepaceunsuball")
     async def livePacemanUnsubAll(self, event: AstrMessageEvent, player_name: str):
-        """取消所有订阅"""
+        """取消所有订阅,需要管理员权限"""
         player_name = player_name.lower()
         if player_name not in self.players.keys():
             yield event.plain_result(f"玩家 {player_name} 不存在，请输入正确的玩家名。")
@@ -141,9 +142,13 @@ class LivePaceman(Star):
 
     async def _fetch_live_paceman(self):
         """获取实时pace数据"""
-        async with httpx.AsyncClient() as client:
-            response = await client.get("https://paceman.gg/api/ars/liveruns")
-            return response.json()
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                response = await client.get("https://paceman.gg/api/ars/liveruns")
+                return response.json()
+        except Exception as e:
+            logger.error(f"获取实时pace数据失败: {e}")
+            return None
 
     def _should_notify(self, player_name: str, world_id: str, event_id: str, igt: int, version: str):
         """是否需要通知玩家"""
@@ -180,12 +185,17 @@ class LivePaceman(Star):
         if room_id is None:
             return False
         try:
-            async with httpx.AsyncClient() as client:
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "Referer": f"https://live.bilibili.com/{room_id}",
+                "Accept": "application/json, text/plain, */*",
+            }
+            async with httpx.AsyncClient(timeout=10, headers=headers) as client:
                 response = await client.get(f"https://api.live.bilibili.com/room/v1/Room/get_info?room_id={room_id}")
                 response.raise_for_status() 
                 logger.info(f"检查玩家 {room_id} 是否在线成功")
                 data = response.json()
-                if data['data']['live_status'] == 1:
+                if data.get('data') and data['data'].get('live_status') == 1:
                     return True
                 else:
                     return False
@@ -226,8 +236,12 @@ class LivePaceman(Star):
                    f"真实时间: {rta} \n"
                    f"游戏时间: {igt} \n")
 
-        if await self._is_player_online(self.players[player_name]["room_id"]):
-            message += f"\n直播间: https://live.bilibili.com/{self.players[player_name]['room_id']}"
+        room_id = self.players[player_name]["room_id"]
+        logger.info(f"[Debug] 玩家 {player_name} 直播间ID: {room_id}")
+        if room_id is not None:
+            logger.info(f"[Debug] 检查玩家 {player_name} 直播间是否在线: {room_id}")
+            if await self._is_player_online(room_id):
+                message += f"直播间: https://live.bilibili.com/{room_id}"
 
         logger.info(f"玩家 {player_name} 当前实时pace: {message}")
 
@@ -236,6 +250,9 @@ class LivePaceman(Star):
 
     async def _notify_player(self):
         data = await self._fetch_live_paceman()
+        if data is None:
+            logger.error("获取实时pace数据失败，跳过通知")
+            return
         current_players = [player["nickname"].lower() for player in data]
         players = list(self.players.keys())
         
