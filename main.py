@@ -11,7 +11,7 @@ import asyncio
 # 用户列表FILE
 PLAYERS_LIST_FILE = "data/live_paceman_players_list.json"
 
-@register("livepaceman", "Mo_An", "livepaceman", "1.0.4")
+@register("livepaceman", "Mo_An", "livepaceman", "1.0.5")
 class LivePaceman(Star):
     def __init__(self, context: Context):
         super().__init__(context)
@@ -144,7 +144,7 @@ class LivePaceman(Star):
         """获取实时pace数据"""
         try:
             async with httpx.AsyncClient(timeout=10) as client:
-                response = await client.get("https://paceman.gg/api/ars/liveruns")
+                response = await client.get("https://paceman.gg/api/ars/liveruns?gameVersion=all&liveOnly=false")
                 return response.json()
         except Exception as e:
             logger.error(f"获取实时pace数据失败: {e}")
